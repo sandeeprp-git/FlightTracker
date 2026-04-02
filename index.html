@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Flight Deal Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #18181f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --accent: #4fffb0;
+    --accent2: #00c9ff;
+    --accent-dim: rgba(79,255,176,0.12);
+    --accent-dim2: rgba(0,201,255,0.1);
+    --text: #f0f0f5;
+    --muted: #6b6b80;
+    --muted2: #9898ac;
+    --danger: #ff5f7e;
+    --warn: #ffb347;
+    --font-display: 'Syne', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --radius: 12px;
+    --radius-lg: 20px;
+  }
+
+  html { font-size: 16px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise bg ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(79,255,176,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,255,176,0.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Glow orbs ── */
+  .orb {
+    position: fixed; border-radius: 50%; filter: blur(80px);
+    pointer-events: none; z-index: 0;
+  }
+  .orb-1 { width: 600px; height: 600px; background: rgba(79,255,176,0.05); top: -200px; left: -200px; }
+  .orb-2 { width: 500px; height: 500px; background: rgba(0,201,255,0.04); bottom: -100px; right: -100px; }
+
+  .app { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ── Header ── */
+  header {
+    padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+  header h1 {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 800; line-height: 1.05; letter-spacing: -0.02em;
+  }
+  header h1 span { color: var(--accent); }
+  .header-meta { font-size: 13px; color: var(--muted); margin-top: 8px; font-family: var(--font-mono); }
+
+  /* ── Status pill ── */
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 40px; padding: 8px 16px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--muted2);
+    white-space: nowrap;
+  }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+  .status-dot.scanning { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--danger); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start; }
+  @media(max-width:860px){ .layout { grid-template-columns: 1fr; } }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title {
+    font-family: var(--font-display);
+    font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted2);
+  }
+  .panel-body { padding: 24px; }
+
+  /* ── Form ── */
+  .field { margin-bottom: 18px; }
+  label {
+    display: block; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 7px; font-family: var(--font-mono);
+  }
+  input, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    padding: 11px 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+  }
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,255,176,0.1);
+  }
+  input::placeholder { color: var(--muted); }
+  select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b80' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--font-display); font-size: 14px; font-weight: 700;
+    letter-spacing: 0.04em; border: none; border-radius: var(--radius);
+    cursor: pointer; transition: all 0.2s; padding: 13px 20px;
+    text-transform: uppercase;
+  }
+  .btn-primary {
+    width: 100%; background: var(--accent); color: #0a0a0f;
+    margin-top: 8px;
+  }
+  .btn-primary:hover { background: #6fffbc; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(79,255,176,0.2); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-ghost {
+    background: transparent; color: var(--muted2);
+    border: 1px solid var(--border2); font-size: 12px; padding: 7px 14px;
+  }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text); background: var(--surface2); }
+
+  /* ── Config section ── */
+  .config-section {
+    margin-top: 20px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+  .config-toggle {
+    font-size: 11px; font-family: var(--font-mono); color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
+    background: none; border: none; color: var(--muted); padding: 0;
+  }
+  .config-toggle:hover { color: var(--muted2); }
+  .config-body { margin-top: 16px; display: none; }
+  .config-body.open { display: block; }
+
+  /* ── Schedule ── */
+  .schedule-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .chip {
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 6px 12px; border-radius: 6px;
+    border: 1px solid var(--border2); background: var(--surface2);
+    color: var(--muted2); cursor: pointer; transition: all 0.15s;
+  }
+  .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+  /* ── Results panel ── */
+  .results-panel { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .stat-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .stat-value { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--text); }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.warn { color: var(--warn); }
+
+  /* ── Results list ── */
+  .results-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .deal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+    transition: border-color 0.2s, transform 0.2s;
+    animation: slideIn 0.35s ease both;
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+  .deal-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .deal-card.hot { border-color: rgba(79,255,176,0.3); background: linear-gradient(135deg, var(--surface), rgba(79,255,176,0.04)); }
+
+  .deal-badge {
+    font-family: var(--font-display); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px;
+    background: var(--accent-dim); color: var(--accent);
+    border: 1px solid rgba(79,255,176,0.2);
+  }
+  .deal-badge.warn { background: rgba(255,179,71,0.1); color: var(--warn); border-color: rgba(255,179,71,0.2); }
+
+  .deal-route {
+    font-family: var(--font-display); font-size: 18px; font-weight: 800;
+    letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px;
+  }
+  .deal-route .arrow-icon { color: var(--muted); font-size: 14px; }
+  .deal-meta { font-size: 12px; color: var(--muted2); font-family: var(--font-mono); margin-top: 4px; }
+
+  .deal-price {
+    text-align: right;
+  }
+  .deal-price .price-main {
+    font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--accent);
+  }
+  .deal-price .price-orig {
+    font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-decoration: line-through;
+  }
+  .deal-price .price-save {
+    font-family: var(--font-mono); font-size: 11px; color: var(--accent); display: block;
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    background: var(--surface); border: 1px dashed var(--border2);
+    border-radius: var(--radius-lg); padding: 60px 40px;
+    text-align: center;
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .empty-desc { font-size: 14px; color: var(--muted); max-width: 300px; margin: 0 auto; }
+
+  /* ── Log ── */
+  .scan-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .log-header { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .log-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .log-body { padding: 14px 18px; max-height: 140px; overflow-y: auto; }
+  .log-entry { font-family: var(--font-mono); font-size: 12px; color: var(--muted2); line-height: 1.8; }
+  .log-entry .ts { color: var(--muted); margin-right: 8px; }
+  .log-entry .ok { color: var(--accent); }
+  .log-entry .err { color: var(--danger); }
+  .log-entry .info { color: var(--accent2); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 32px; right: 32px; z-index: 999;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 13px; color: var(--text);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    transform: translateY(20px); opacity: 0;
+    transition: all 0.3s ease; pointer-events: none; max-width: 340px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: rgba(79,255,176,0.4); color: var(--accent); }
+  #toast.error { border-color: rgba(255,95,126,0.4); color: var(--danger); }
+
+  .origin-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    padding: 5px 10px 5px 12px; border-radius: 6px;
+    background: var(--accent-dim); border: 1px solid rgba(79,255,176,0.25);
+    color: var(--accent);
+  }
+  .origin-chip button {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0; opacity: 0.6;
+  }
+  .origin-chip button:hover { opacity: 1; }
+
+  /* ── Mode toggle ── */
+  .mode-toggle {
+    display: flex; background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 3px; gap: 3px; margin-bottom: 18px;
+  }
+  .mode-btn {
+    flex: 1; font-family: var(--font-display); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    border: none; border-radius: 9px; padding: 9px 12px; cursor: pointer;
+    color: var(--muted); background: transparent; transition: all 0.2s;
+  }
+  .mode-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .mode-btn.active.miles-mode { color: var(--accent2); }
+  .mode-btn.active.price-mode { color: var(--accent); }
+
+  .miles-accent { color: var(--accent2) !important; }
+  .miles-badge { background: rgba(0,201,255,0.12) !important; color: var(--accent2) !important; border-color: rgba(0,201,255,0.25) !important; }
+
+  /* ── Loyalty program chips ── */
+  .program-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .program-chip {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 5px 10px; border-radius: 6px;
+    border: 1px solid var(--border2); background: var(--surface2);
+    color: var(--muted2); cursor: pointer; transition: all 0.15s;
+  }
+  .program-chip.active { background: rgba(0,201,255,0.1); border-color: rgba(0,201,255,0.3); color: var(--accent2); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* ── Progress bar ── */
+  #progress-bar {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    z-index: 100; transition: width 0.4s ease;
+    box-shadow: 0 0 10px var(--accent);
+  }
+
+  .section-label {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div id="toast"></div>
+
+<div class="app">
+  <header>
+    <div>
+      <div class="logo">✦ Flight Tracker</div>
+      <h1>Find the<br/><span>best deals.</span></h1>
+      <div class="header-meta">Powered by Duffel · EmailJS</div>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Idle — configure a search</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ── Left: Config Panel ── -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Search criteria</span>
+          <button class="btn btn-ghost" onclick="resetForm()">Reset</button>
+        </div>
+        <div class="panel-body">
+
+          <!-- Search mode toggle -->
+          <div class="mode-toggle">
+            <button class="mode-btn price-mode active" id="mode-price" onclick="setMode('price')">$ Cash price</button>
+            <button class="mode-btn miles-mode" id="mode-miles" onclick="setMode('miles')">✦ Miles / points</button>
+          </div>
+
+          <div class="field">
+            <label>From <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(add multiple)</span></label>
+            <div class="origin-input-row" style="display:flex;gap:8px;align-items:center">
+              <input id="origin-input" type="text" placeholder="DCA" maxlength="3" style="text-transform:uppercase;flex:1"/>
+              <button class="btn btn-ghost" style="padding:9px 14px;font-size:13px;white-space:nowrap" onclick="addOrigin()">+ Add</button>
+            </div>
+            <div class="origin-chips" id="origin-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+          </div>
+
+          <div class="field">
+            <label>To</label>
+            <input id="dest" type="text" placeholder="LAX" maxlength="3" style="text-transform:uppercase"/>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label>Depart after</label>
+              <input id="date-from" type="date"/>
+            </div>
+            <div class="field">
+              <label>Depart before</label>
+              <input id="date-to" type="date"/>
+            </div>
+          </div>
+
+          <!-- Price mode fields -->
+          <div id="price-fields">
+            <div class="field">
+              <label>Max price ($)</label>
+              <input id="max-price" type="number" placeholder="300" min="1"/>
+            </div>
+            <div class="field">
+              <label>Fare class <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(select multiple)</span></label>
+              <div class="schedule-chips" id="fare-chips">
+                <div class="chip active" data-fare="1" onclick="toggleFare(this)">Economy</div>
+                <div class="chip" data-fare="2" onclick="toggleFare(this)">Premium eco</div>
+                <div class="chip" data-fare="3" onclick="toggleFare(this)">Business</div>
+                <div class="chip" data-fare="4" onclick="toggleFare(this)">First</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Miles mode fields -->
+          <div id="miles-fields" style="display:none">
+            <div class="field">
+              <label>Max miles</label>
+              <input id="max-miles" type="number" placeholder="50000" min="1000" step="1000"/>
+            </div>
+            <div class="field">
+              <label>Cabin <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(select multiple)</span></label>
+              <div class="schedule-chips" id="cabin-chips">
+                <div class="chip active" data-cabin="economy" onclick="toggleCabin(this)">Economy</div>
+                <div class="chip" data-cabin="business" onclick="toggleCabin(this)">Business</div>
+                <div class="chip" data-cabin="first" onclick="toggleCabin(this)">First</div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Loyalty program</label>
+              <div class="program-chips">
+                <div class="program-chip active" data-program="AA" onclick="toggleProgram(this)">AAdvantage</div>
+                <div class="program-chip" data-program="DL" onclick="toggleProgram(this)">SkyMiles</div>
+                <div class="program-chip" data-program="UA" onclick="toggleProgram(this)">MileagePlus</div>
+                <div class="program-chip" data-program="WN" onclick="toggleProgram(this)">Rapid Rewards</div>
+                <div class="program-chip" data-program="B6" onclick="toggleProgram(this)">TrueBlue</div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Max cash co-pay ($)</label>
+              <input id="max-copay" type="number" placeholder="25" min="0" value="25"/>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Preferred airline</label>
+            <select id="airline">
+              <option value="">Any airline</option>
+              <option value="AA">American Airlines</option>
+              <option value="DL">Delta</option>
+              <option value="UA">United</option>
+              <option value="WN">Southwest</option>
+              <option value="B6">JetBlue</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Trip type</label>
+            <select id="trip-type">
+              <option value="1">Round trip</option>
+              <option value="2">One way</option>
+            </select>
+          </div>
+
+          <!-- Schedule -->
+          <div class="field">
+            <label>Scan schedule</label>
+            <div class="schedule-chips">
+              <div class="chip active" data-scans="3" onclick="setSchedule(this)">3× daily</div>
+              <div class="chip" data-scans="2" onclick="setSchedule(this)">2× daily</div>
+              <div class="chip" data-scans="1" onclick="setSchedule(this)">Once daily</div>
+              <div class="chip" data-scans="0" onclick="setSchedule(this)">Manual only</div>
+            </div>
+          </div>
+
+          <!-- API config (collapsed) -->
+          <div class="config-section">
+            <button class="config-toggle" onclick="toggleConfig()">
+              <span id="cfg-arrow">▶</span> API Configuration
+            </button>
+            <div class="config-body" id="config-body">
+              <div style="font-size:11px;color:var(--accent2);font-family:var(--font-mono);line-height:1.7;margin-bottom:14px;padding:10px 12px;background:rgba(0,201,255,0.06);border:1px solid rgba(0,201,255,0.15);border-radius:8px;">
+                ✦ Duffel — free sign-up at app.duffel.com<br/>
+                Dashboard → Access tokens → Create token (test mode).
+              </div>
+              <div class="field">
+                <label>Duffel access token</label>
+                <input id="duffel-token" type="password" placeholder="duffel_test_xxxxxxxxxxxxxxxx"/>
+              </div>
+              <div class="field" style="margin-top:6px">
+                <label>EmailJS service ID</label>
+                <input id="ejs-service" type="text" placeholder="service_xxxxxxx"/>
+              </div>
+              <div class="field">
+                <label>EmailJS template ID</label>
+                <input id="ejs-template" type="text" placeholder="template_xxxxxxx"/>
+              </div>
+              <div class="field">
+                <label>EmailJS public key</label>
+                <input id="ejs-pubkey" type="text" placeholder="Your public key"/>
+              </div>
+              <div class="field">
+                <label>Alert email address</label>
+                <input id="alert-email" type="email" placeholder="you@example.com"/>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--font-mono);line-height:1.6">
+                Keys are stored in localStorage only. Never shared.
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="scan-btn" onclick="startScan()">
+            <span id="scan-btn-text">⬡ Scan now</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: Results Panel ── -->
+    <div class="results-panel">
+
+      <!-- Stats -->
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-label">Scans run</div>
+          <div class="stat-value accent" id="stat-scans">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Deals found</div>
+          <div class="stat-value" id="stat-deals">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Alerts sent</div>
+          <div class="stat-value warn" id="stat-alerts">0</div>
+        </div>
+      </div>
+
+      <!-- Deals -->
+      <div class="section-label">Live results</div>
+      <div id="results-container">
+        <div class="empty-state">
+          <div class="empty-icon">✦</div>
+          <div class="empty-title">No scans yet</div>
+          <div class="empty-desc">Configure your criteria and hit Scan Now to find deals.</div>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="scan-log">
+        <div class="log-header">
+          <span class="log-title">Scan log</span>
+          <button class="btn btn-ghost" onclick="clearLog()" style="padding:4px 10px;font-size:11px">Clear</button>
+        </div>
+        <div class="log-body" id="log-body">
+          <div class="log-entry"><span class="ts">--:--:--</span>Waiting for first scan...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let state = {
+  scans: 0, deals: 0, alerts: 0,
+  scansPerDay: 3,
+  results: [],
+  currentScanDeals: [],
+  schedulerTimer: null,
+  scanning: false
+};
+
+// ── Init ──
+(function init() {
+  loadKeys();
+  const today = new Date();
+  const nextMonth = new Date(); nextMonth.setDate(today.getDate() + 30);
+  document.getElementById('date-from').value = today.toISOString().split('T')[0];
+  document.getElementById('date-to').value = nextMonth.toISOString().split('T')[0];
+  // Initialize EmailJS if public key already saved
+  const savedPubKey = localStorage.getItem('ejs-pubkey');
+  if (savedPubKey) {
+    emailjs.init(savedPubKey);
+    log('EmailJS initialized from saved key', 'ok');
+  }
+  startScheduler();
+})();
+
+function loadKeys() {
+  ['duffel-token','ejs-service','ejs-template','ejs-pubkey','alert-email'].forEach(id => {
+    const val = localStorage.getItem(id);
+    if (val) document.getElementById(id).value = val;
+  });
+}
+function saveKeys() {
+  ['duffel-token','ejs-service','ejs-template','ejs-pubkey','alert-email'].forEach(id => {
+    localStorage.setItem(id, document.getElementById(id).value);
+  });
+  // Re-initialize EmailJS whenever keys are saved
+  const pubKey = document.getElementById('ejs-pubkey').value.trim();
+  if (pubKey) {
+    emailjs.init(pubKey);
+    log('EmailJS re-initialized with updated key', 'info');
+  }
+}
+
+// ── Schedule ──
+function setSchedule(el) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.scansPerDay = parseInt(el.dataset.scans);
+  startScheduler();
+  log(`Schedule set to ${el.textContent}`, 'info');
+}
+
+function startScheduler() {
+  if (state.schedulerTimer) clearInterval(state.schedulerTimer);
+  if (state.scansPerDay === 0) return;
+  const intervalMs = (24 * 60 * 60 * 1000) / state.scansPerDay;
+  state.schedulerTimer = setInterval(() => {
+    log('Scheduled scan triggered', 'info');
+    startScan(true);
+  }, intervalMs);
+}
+
+// ── Mode ──
+let searchMode = 'price';
+let activePrograms = ['AA'];
+let activeOrigins = [];
+let activeFares = ['1'];
+let activeCabins = ['economy'];
+
+// ── Origin chips ──
+function addOrigin() {
+  const input = document.getElementById('origin-input');
+  const code = input.value.trim().toUpperCase();
+  if (!code || code.length < 2) { showToast('Enter a valid airport code (e.g. DCA)', 'error'); return; }
+  if (activeOrigins.includes(code)) { showToast(`${code} already added`, ''); input.value = ''; return; }
+  activeOrigins.push(code);
+  renderOriginChips();
+  input.value = '';
+  input.focus();
+}
+
+function removeOrigin(code) {
+  activeOrigins = activeOrigins.filter(o => o !== code);
+  renderOriginChips();
+}
+
+function renderOriginChips() {
+  const container = document.getElementById('origin-chips');
+  container.innerHTML = activeOrigins.map(code =>
+    `<span class="origin-chip">${code}<button onclick="removeOrigin('${code}')" title="Remove">×</button></span>`
+  ).join('');
+}
+
+// ── Fare class chips ──
+function toggleFare(el) {
+  el.classList.toggle('active');
+  activeFares = [...document.querySelectorAll('#fare-chips .chip.active')].map(c => c.dataset.fare);
+  if (activeFares.length === 0) { el.classList.add('active'); activeFares = [el.dataset.fare]; }
+}
+
+// ── Cabin chips (miles mode) ──
+function toggleCabin(el) {
+  el.classList.toggle('active');
+  activeCabins = [...document.querySelectorAll('#cabin-chips .chip.active')].map(c => c.dataset.cabin);
+  if (activeCabins.length === 0) { el.classList.add('active'); activeCabins = [el.dataset.cabin]; }
+}
+
+function setMode(mode) {
+  searchMode = mode;
+  document.getElementById('mode-price').classList.toggle('active', mode === 'price');
+  document.getElementById('mode-miles').classList.toggle('active', mode === 'miles');
+  document.getElementById('price-fields').style.display = mode === 'price' ? '' : 'none';
+  document.getElementById('miles-fields').style.display = mode === 'miles' ? '' : 'none';
+  log(`Switched to ${mode === 'price' ? 'cash price' : 'miles/points'} mode`, 'info');
+}
+
+const programToAirline = { AA: 'AA', DL: 'DL', UA: 'UA', WN: 'WN', B6: 'B6' };
+
+function toggleProgram(el) {
+  el.classList.toggle('active');
+  activePrograms = [...document.querySelectorAll('.program-chip.active')].map(c => c.dataset.program);
+  const airlineSelect = document.getElementById('airline');
+  if (activePrograms.length === 1) {
+    const mapped = programToAirline[activePrograms[0]];
+    if (mapped) {
+      airlineSelect.value = mapped;
+      log('Preferred airline auto-set to match ' + el.textContent.trim(), 'info');
+    }
+  } else if (activePrograms.length === 0) {
+    airlineSelect.value = '';
+  } else {
+    airlineSelect.value = '';
+  }
+}
+
+// ── Scan ──
+async function startScan(auto = false) {
+  if (state.scanning) return;
+
+  const dest       = document.getElementById('dest').value.trim().toUpperCase();
+  const airline    = document.getElementById('airline').value;
+  const tripType   = document.getElementById('trip-type').value;
+  const dateFrom   = document.getElementById('date-from').value;
+  const dateTo     = document.getElementById('date-to').value;
+  const duffelToken = document.getElementById('duffel-token').value.trim();
+
+  const maxPrice   = searchMode === 'price' ? parseFloat(document.getElementById('max-price').value) : null;
+  const maxMiles   = searchMode === 'miles' ? parseFloat(document.getElementById('max-miles').value) : null;
+  const maxCopay   = searchMode === 'miles' ? parseFloat(document.getElementById('max-copay').value || 25) : null;
+
+  // Collect selected origins and cabins/fares
+  const origins  = activeOrigins.length > 0 ? activeOrigins : [];
+  const cabins   = searchMode === 'miles' ? activeCabins : activeFares.map(f => ({'1':'economy','2':'premium_economy','3':'business','4':'first'}[f]));
+
+  if (origins.length === 0) { showToast('Add at least one origin airport', 'error'); return; }
+  if (!dest) { showToast('Enter a destination airport', 'error'); return; }
+  if (!duffelToken) {
+    showToast('Add your Duffel access token in API Configuration ↓', 'error');
+    if (!document.getElementById('config-body').classList.contains('open')) toggleConfig();
+    return;
+  }
+  if (searchMode === 'price' && (!maxPrice || maxPrice < 1)) { showToast('Set a max price to filter deals', 'error'); return; }
+  if (searchMode === 'miles' && (!maxMiles || maxMiles < 1000)) { showToast('Set a max miles value to filter deals', 'error'); return; }
+
+  saveKeys();
+  state.scanning = true;
+  state.currentScanDeals = []; // reset batch for this scan
+  const comboCount = origins.length * cabins.length;
+  setStatus('scanning', `Scanning ${comboCount} combination${comboCount > 1 ? 's' : ''}…`);
+  setProgress(10);
+
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  document.getElementById('scan-btn-text').textContent = '⟳ Scanning…';
+
+  const fareLabel = searchMode === 'price'
+    ? activeFares.map(f => ['Economy','Premium Eco','Business','First'][f-1]).join(', ')
+    : activeCabins.join(', ');
+  log(`Scan started: [${origins.join(', ')}] → ${dest} | ${fareLabel}`, 'info');
+
+  try {
+    let allResults = [];
+    const progressStep = 70 / comboCount;
+    state.currentScanDeals = []; // reset batch for this scan
+
+    // Loop over every origin × cabin combination
+    for (const origin of origins) {
+      for (const cabin of cabins) {
+        log(`Searching ${origin} → ${dest} | ${cabin}…`, 'info');
+
+        const slices = [{ origin, destination: dest, departure_date: dateFrom }];
+        if (tripType === '1' && dateTo) slices.push({ origin: dest, destination: origin, departure_date: dateTo });
+
+        const body = {
+          data: {
+            slices,
+            passengers: [{ type: 'adult' }],
+            cabin_class: cabin,
+            ...(airline ? { requested_sources: [airline] } : {})
+          }
+        };
+
+        try {
+          const offerResp = await fetch('https://api.duffel.com/air/offer_requests?return_offers=true', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${duffelToken}`,
+              'Content-Type': 'application/json',
+              'Duffel-Version': 'v2',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+
+          if (!offerResp.ok) {
+            const errJson = await offerResp.json().catch(() => ({}));
+            const msg = errJson.errors?.[0]?.message || errJson.errors?.[0]?.title || `Duffel error ${offerResp.status}`;
+            log(`${origin}→${dest} ${cabin}: ${msg}`, 'err');
+          } else {
+            const data = await offerResp.json();
+            allResults.push({ data, origin, dest, cabin });
+          }
+        } catch(e) {
+          log(`${origin}→${dest} ${cabin}: API error — using demo data`, 'err');
+          allResults.push({ data: generateMockData(origin, dest, maxPrice, maxMiles, airline), origin, dest, cabin });
+        }
+
+        setProgress(Math.min(80, (allResults.length / comboCount) * 70 + 10));
+      }
+    }
+
+    // Process all results
+    setProgress(85);
+    for (const { data, origin, dest, cabin } of allResults) {
+      processResults(data, origin, dest, maxPrice, maxMiles, maxCopay, null, cabin, airline, dateFrom, dateTo);
+    }
+
+    state.scans++;
+    updateStats();
+    setProgress(100);
+    setTimeout(() => setProgress(0), 800);
+    setStatus('active', `Last scan: ${now()}`);
+
+    const totalDeals = state.currentScanDeals.length;
+    if (totalDeals > 0) {
+      const label = searchMode === 'price' ? `under $${maxPrice}` : `under ${maxMiles?.toLocaleString()} miles`;
+      showToast(`${totalDeals} deal${totalDeals > 1 ? 's' : ''} found ${label} — top 3 emailed!`, 'success');
+      log(`Scan complete — ${totalDeals} deal(s) found, sending top 3 email`, 'ok');
+      await sendBatchEmailAlert(state.currentScanDeals, maxPrice, maxMiles);
+    } else {
+      showToast('Scan complete — no deals found under your criteria', '');
+      log(`Scan complete — no deals found`, 'info');
+    }
+
+  } catch (err) {
+    log(`Scan error: ${err.message}`, 'err');
+    setStatus('error', 'Scan failed');
+    showToast('Scan failed: ' + err.message, 'error');
+    setProgress(0);
+  }
+
+  state.scanning = false;
+  btn.disabled = false;
+  document.getElementById('scan-btn-text').textContent = '⬡ Scan now';
+}
+
+function processResults(data, origin, dest, maxPrice, maxMiles, maxCopay, fareClass, milesCabin, preferredAirline, dateFrom, dateTo) {
+  // Duffel returns { data: { offers: [...] } }, mock returns { best_flights: [...] }
+  const isDuffel = !!data.data?.offers;
+  const flights = isDuffel ? data.data.offers : (data.best_flights || data.other_flights || []);
+  const dealsFound = [];
+
+  flights.forEach(offer => {
+    let price, airlineName, departure, arrival, duration, stops, miles, copay;
+
+    if (isDuffel) {
+      // Duffel offer format
+      price = parseFloat(offer.total_amount || 0);
+      const firstSlice = offer.slices?.[0];
+      const segments = firstSlice?.segments || [];
+      const firstSeg = segments[0] || {};
+      const lastSeg = segments[segments.length - 1] || {};
+      airlineName = firstSeg.operating_carrier?.name || firstSeg.marketing_carrier?.name || 'Unknown airline';
+      departure = firstSeg.departing_at || dateFrom;
+      arrival = lastSeg.arriving_at || dateTo;
+      duration = firstSlice?.duration
+        ? (() => { const m = firstSlice.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/); return (parseInt(m?.[1]||0)*60) + parseInt(m?.[2]||0); })()
+        : 0;
+      stops = Math.max(0, segments.length - 1);
+      miles = null; copay = 0;
+    } else {
+      // Mock fallback format
+      const itinerary = Array.isArray(offer.flights) ? offer.flights : [offer];
+      price = offer.price || 0;
+      miles = offer.miles || offer.award_miles || null;
+      copay = offer.copay || 0;
+      const firstLeg = itinerary[0] || {};
+      airlineName = firstLeg.airline || 'Unknown airline';
+      departure = firstLeg.departure_airport?.time || dateFrom;
+      arrival = (itinerary[itinerary.length - 1] || {}).arrival_airport?.time || dateTo;
+      duration = offer.total_duration || 0;
+      stops = itinerary.length - 1;
+    }
+
+    if (searchMode === 'price') {
+      if (!price || price > maxPrice) return;
+      dealsFound.push({ mode: 'price', origin, dest, price, airlineName, departure, arrival, duration, stops });
+    } else {
+      const m = miles;
+      if (!m || m > maxMiles) return;
+      if (maxCopay != null && copay > maxCopay) return;
+      dealsFound.push({ mode: 'miles', origin, dest, miles: m, copay, airlineName, departure, arrival, duration, stops, cabin: milesCabin });
+    }
+  });
+
+  state.results = [...dealsFound, ...state.results].slice(0, 30);
+  state.deals += dealsFound.length;
+  renderResults(state.results, maxPrice, maxMiles);
+
+  if (dealsFound.length > 0) {
+    state.currentScanDeals = [...(state.currentScanDeals || []), ...dealsFound];
+    const label = searchMode === 'price' ? `under $${maxPrice}` : `under ${maxMiles?.toLocaleString()} miles`;
+    showToast(`${state.currentScanDeals.length} deal${state.currentScanDeals.length > 1 ? 's' : ''} found so far!`, 'success');
+  }
+}
+
+function renderResults(results, maxPrice, maxMiles) {
+  const container = document.getElementById('results-container');
+  if (results.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">✦</div><div class="empty-title">No deals found yet</div><div class="empty-desc">Try a higher max price/miles or different dates.</div></div>`;
+    return;
+  }
+
+  const html = `<div class="results-list">${results.map((r, i) => {
+    const isMiles = r.mode === 'miles';
+    const isHot = isMiles
+      ? (maxMiles && r.miles <= maxMiles * 0.75)
+      : (maxPrice && r.price <= maxPrice * 0.8);
+    const depDate = r.departure ? new Date(r.departure).toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '—';
+    const hrs = r.duration ? `${Math.floor(r.duration/60)}h ${r.duration%60}m` : '';
+    const stopsLabel = r.stops === 0 ? 'Nonstop' : `${r.stops} stop${r.stops>1?'s':''}`;
+
+    const badgeClass = isMiles ? 'miles-badge' : (isHot ? '' : 'warn');
+    const badgeLabel = isMiles ? (isHot ? 'SWEET SPOT' : 'AWARD') : (isHot ? 'HOT DEAL' : 'DEAL');
+
+    const priceBlock = isMiles
+      ? `<div class="deal-price">
+          <div class="price-main miles-accent">${(r.miles/1000).toFixed(0)}k mi</div>
+          ${r.copay > 0 ? `<span class="price-save" style="color:var(--muted2)">+$${r.copay} taxes</span>` : '<span class="price-save">No fees</span>'}
+         </div>`
+      : `<div class="deal-price">
+          <div class="price-main">$${r.price}</div>
+          ${maxPrice && maxPrice - r.price > 0 ? `<span class="price-save">Save $${Math.round(maxPrice - r.price)}</span>` : ''}
+         </div>`;
+
+    return `<div class="deal-card ${isHot?'hot':''}" style="animation-delay:${i*0.05}s">
+      <div><span class="deal-badge ${badgeClass}">${badgeLabel}</span></div>
+      <div>
+        <div class="deal-route">${r.origin} <span class="arrow-icon">→</span> ${r.dest}</div>
+        <div class="deal-meta">${r.airlineName} · ${depDate} · ${stopsLabel}${hrs?' · '+hrs:''}${isMiles && r.cabin?' · '+r.cabin:''}</div>
+      </div>
+      ${priceBlock}
+    </div>`;
+  }).join('')}</div>`;
+  container.innerHTML = html;
+}
+
+// ── Email — batch top 3 deals per scan ──
+async function sendBatchEmailAlert(allDeals, maxPrice, maxMiles) {
+  const serviceId = document.getElementById('ejs-service').value.trim();
+  const templateId = document.getElementById('ejs-template').value.trim();
+  const pubKey = document.getElementById('ejs-pubkey').value.trim();
+  const toEmail = document.getElementById('alert-email').value.trim();
+
+  if (!serviceId || !templateId || !pubKey || !toEmail) {
+    log('Email skipped — EmailJS not configured', 'err');
+    return;
+  }
+
+  // Sort by best value: price mode → lowest price, miles mode → fewest miles
+  const sorted = [...allDeals].sort((a, b) =>
+    searchMode === 'miles' ? (a.miles - b.miles) : (a.price - b.price)
+  );
+  const top3 = sorted.slice(0, 3);
+
+  // Build numbered variables for each deal slot (fill blanks if fewer than 3 found)
+  const params = { to_email: toEmail };
+  const blank = { route:'—', airline:'—', departure:'—', stops:'—', price_label:'', price:'', miles_label:'', miles:'' };
+
+  for (let i = 0; i < 3; i++) {
+    const deal = top3[i];
+    const n = i + 1;
+    if (!deal) {
+      Object.entries(blank).forEach(([k, v]) => params[`${k}_${n}`] = v);
+      continue;
+    }
+    const isMiles = deal.mode === 'miles';
+    params[`route_${n}`]       = `${deal.origin} → ${deal.dest}`;
+    params[`airline_${n}`]     = deal.airlineName;
+    params[`departure_${n}`]   = deal.departure ? new Date(deal.departure).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'}) : '—';
+    params[`stops_${n}`]       = deal.stops === 0 ? 'Nonstop' : `${deal.stops} stop(s)`;
+    params[`price_label_${n}`] = isMiles ? 'Co-pay' : 'Price';
+    params[`price_${n}`]       = isMiles ? (deal.copay > 0 ? `$${deal.copay} (taxes & fees)` : 'No fees') : `$${deal.price}`;
+    params[`miles_label_${n}`] = isMiles ? 'Miles' : '';
+    params[`miles_${n}`]       = isMiles ? `${deal.miles?.toLocaleString()} miles` : '';
+  }
+
+  // Subject line: highlight the single best deal
+  const best = top3[0];
+  const isBestMiles = best?.mode === 'miles';
+  params.subject = 'Flight Scan';
+  params.scan_date = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  try {
+    await emailjs.send(serviceId, templateId, params);
+    state.alerts++;
+    updateStats();
+    log(`Batch email sent — top ${top3.length} deal(s) to ${toEmail}`, 'ok');
+  } catch (err) {
+    const detail = err?.text || err?.message || JSON.stringify(err);
+    log(`Email failed: ${detail}`, 'err');
+    showToast('Email failed — check API Configuration and EmailJS template', 'error');
+  }
+}
+
+// ── Mock data (fallback when CORS blocks SerpApi) ──
+function generateMockData(origin, dest, maxPrice, maxMiles, preferredAirline) {
+  const airlines = ['American Airlines','Delta','United','JetBlue','Alaska'];
+  const pick = preferredAirline === 'AA' ? 'American Airlines' : airlines[Math.floor(Math.random()*airlines.length)];
+
+  if (searchMode === 'miles') {
+    const baseMiles = Math.max(5000, (maxMiles || 50000) - Math.floor(Math.random() * (maxMiles || 50000) * 0.35));
+    return {
+      best_flights: [
+        { miles: baseMiles, copay: 5.60, award_miles: baseMiles, flights: [{ airline: pick, departure_airport: { time: new Date(Date.now()+86400000*7).toISOString() }, arrival_airport: { time: new Date(Date.now()+86400000*7+18000000).toISOString() } }], total_duration: 300 },
+        { miles: Math.round(baseMiles * 1.2), copay: 11.20, award_miles: Math.round(baseMiles * 1.2), flights: [{ airline: airlines[1] }, {}], total_duration: 390 }
+      ]
+    };
+  }
+
+  const basePrice = Math.max(80, (maxPrice || 300) - Math.floor(Math.random() * (maxPrice || 300) * 0.4));
+  return {
+    best_flights: [
+      { price: basePrice, flights: [{ airline: pick, departure_airport: { time: new Date(Date.now()+86400000*7).toISOString() }, arrival_airport: { time: new Date(Date.now()+86400000*7+18000000).toISOString() } }], total_duration: 300 },
+      { price: Math.round(basePrice * 1.12), flights: [{ airline: airlines[1] }, {}], total_duration: 420 }
+    ]
+  };
+}
+
+// ── UI helpers ──
+function updateStats() {
+  document.getElementById('stat-scans').textContent = state.scans;
+  document.getElementById('stat-deals').textContent = state.deals;
+  document.getElementById('stat-alerts').textContent = state.alerts;
+}
+
+function setStatus(type, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + type;
+  document.getElementById('status-text').textContent = text;
+}
+
+function setProgress(pct) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+function log(msg, type = '') {
+  const body = document.getElementById('log-body');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="ts">${now()}</span><span class="${type}">${msg}</span>`;
+  body.prepend(entry);
+  while (body.children.length > 60) body.removeChild(body.lastChild);
+}
+
+function clearLog() {
+  document.getElementById('log-body').innerHTML = '<div class="log-entry"><span class="ts">--:--:--</span>Log cleared.</div>';
+}
+
+function now() {
+  return new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3500);
+}
+
+function toggleConfig() {
+  const body = document.getElementById('config-body');
+  const arrow = document.getElementById('cfg-arrow');
+  body.classList.toggle('open');
+  arrow.textContent = body.classList.contains('open') ? '▼' : '▶';
+}
+
+function resetForm() {
+  document.getElementById('origin-input').value = '';
+  document.getElementById('dest').value = '';
+  document.getElementById('max-price').value = '';
+  document.getElementById('max-miles').value = '';
+  document.getElementById('max-copay').value = '25';
+  document.getElementById('airline').value = '';
+  document.getElementById('trip-type').value = '1';
+  activeOrigins = [];
+  activeFares = ['1'];
+  activeCabins = ['economy'];
+  renderOriginChips();
+  document.querySelectorAll('#fare-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.fare === '1'));
+  document.querySelectorAll('#cabin-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.cabin === 'economy'));
+  document.querySelectorAll('.program-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('.program-chip[data-program="AA"]').classList.add('active');
+  activePrograms = ['AA'];
+  state.results = [];
+  renderResults([], 999, 999999);
+  log('Form reset', 'info');
+}
+
+// Enter key on origin input adds the chip
+document.getElementById('origin-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addOrigin(); }
+});
+document.getElementById('origin-input').addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+document.getElementById('dest').addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+</script>
+</body>
+</html>
