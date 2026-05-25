@@ -864,6 +864,7 @@ function processResults(data, origin, dest, maxPrice, maxMiles, maxCopay, fareCl
       duration = outbound.duration_minutes || 0;
       stops = Math.max(0, segments.length - 1);
       miles = null; copay = 0;
+      log(`Offer keys: ${Object.keys(offer).join(', ')} | ignav_id: ${offer.ignav_id || 'MISSING'}`, 'info');
     } else {
       // Mock fallback format
       const itinerary = Array.isArray(offer.flights) ? offer.flights : [offer];
