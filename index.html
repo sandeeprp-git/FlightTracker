@@ -960,22 +960,32 @@ async function sendBatchEmailAlert(allDeals, maxPrice, maxMiles) {
 
   // Fetch booking links for each deal via ignav_id
   async function fetchBookingLink(deal) {
-    if (!deal.ignavId) return '—';
+    if (!deal.ignavId) {
+      log(`No ignav_id for ${deal.origin}→${deal.dest} — skipping booking link`, 'err');
+      return '—';
+    }
+    log(`Fetching booking link for ignav_id: ${deal.ignavId}`, 'info');
     try {
       const resp = await fetch('https://ignav-proxy.sandeep-rp001.workers.dev/booking-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ ignav_id: deal.ignavId })
       });
-      if (!resp.ok) return '—';
+      if (!resp.ok) {
+        log(`Booking link fetch failed: HTTP ${resp.status}`, 'err');
+        return '—';
+      }
       const data = await resp.json();
-      // Prefer airline direct link, fall back to first available
+      log(`Booking link response: ${JSON.stringify(data).slice(0, 120)}`, 'info');
       const options = data.booking_options || [];
       const links = options.flatMap(o => o.links || []);
       const airlineLink = links.find(l => l.provider_type === 'airline');
       const bestLink = airlineLink || links[0];
       return bestLink?.url || '—';
-    } catch { return '—'; }
+    } catch(e) {
+      log(`Booking link error: ${e.message}`, 'err');
+      return '—';
+    }
   }
 
   // Fetch all booking links in parallel
