@@ -478,11 +478,70 @@
             <label>Preferred airline</label>
             <select id="airline">
               <option value="">Any airline</option>
-              <option value="AA">American Airlines</option>
-              <option value="DL">Delta</option>
-              <option value="UA">United</option>
-              <option value="WN">Southwest</option>
-              <option value="B6">JetBlue</option>
+              <optgroup label="⬡ Oneworld">
+                <option value="AA">American Airlines</option>
+                <option value="AS">Alaska Airlines</option>
+                <option value="BA">British Airways</option>
+                <option value="CX">Cathay Pacific</option>
+                <option value="AY">Finnair</option>
+                <option value="HA">Hawaiian Airlines</option>
+                <option value="IB">Iberia</option>
+                <option value="JL">Japan Airlines</option>
+                <option value="MH">Malaysia Airlines</option>
+                <option value="WY">Oman Air</option>
+                <option value="QF">Qantas</option>
+                <option value="AT">Royal Air Maroc</option>
+                <option value="RJ">Royal Jordanian</option>
+                <option value="UL">SriLankan Airlines</option>
+                <option value="FJ">Fiji Airways</option>
+              </optgroup>
+              <optgroup label="★ Star Alliance">
+                <option value="AC">Air Canada</option>
+                <option value="AI">Air India</option>
+                <option value="NZ">Air New Zealand</option>
+                <option value="NH">ANA</option>
+                <option value="OZ">Asiana Airlines</option>
+                <option value="AV">Avianca</option>
+                <option value="CM">Copa Airlines</option>
+                <option value="MS">EgyptAir</option>
+                <option value="ET">Ethiopian Airlines</option>
+                <option value="BR">EVA Air</option>
+                <option value="AZ">ITA Airways</option>
+                <option value="LO">LOT Polish Airlines</option>
+                <option value="LH">Lufthansa</option>
+                <option value="CL">Lufthansa City Airlines</option>
+                <option value="SK">Scandinavian Airlines</option>
+                <option value="ZH">Shenzhen Airlines</option>
+                <option value="SQ">Singapore Airlines</option>
+                <option value="SA">South African Airways</option>
+                <option value="LX">Swiss</option>
+                <option value="TP">TAP Air Portugal</option>
+                <option value="TG">Thai Airways</option>
+                <option value="TK">Turkish Airlines</option>
+                <option value="UA">United Airlines</option>
+              </optgroup>
+              <optgroup label="◈ SkyTeam">
+                <option value="SU">Aeroflot</option>
+                <option value="AR">Aerolíneas Argentinas</option>
+                <option value="AM">Aeromexico</option>
+                <option value="UX">Air Europa</option>
+                <option value="AF">Air France</option>
+                <option value="AZ">Alitalia</option>
+                <option value="CI">China Airlines</option>
+                <option value="MU">China Eastern</option>
+                <option value="CZ">China Southern</option>
+                <option value="OK">Czech Airlines</option>
+                <option value="DL">Delta Air Lines</option>
+                <option value="GA">Garuda Indonesia</option>
+                <option value="KQ">Kenya Airways</option>
+                <option value="KL">KLM</option>
+                <option value="KE">Korean Air</option>
+                <option value="ME">Middle East Airlines</option>
+                <option value="SV">Saudia</option>
+                <option value="RO">TAROM</option>
+                <option value="VN">Vietnam Airlines</option>
+                <option value="MF">Xiamen Airlines</option>
+              </optgroup>
             </select>
           </div>
 
@@ -706,7 +765,17 @@ function setMode(mode) {
   log(`Switched to ${mode === 'price' ? 'cash price' : 'miles/points'} mode`, 'info');
 }
 
-const programToAirline = { AA: 'AA', DL: 'DL', UA: 'UA', WN: 'WN', B6: 'B6' };
+const programToAirline = {
+  AA: 'AA', DL: 'DL', UA: 'UA', WN: 'WN', B6: 'B6',
+  // Oneworld
+  AS: 'AS', BA: 'BA', CX: 'CX', AY: 'AY', IB: 'IB',
+  JL: 'JL', QF: 'QF', MH: 'MH',
+  // Star Alliance
+  AC: 'AC', NH: 'NH', LH: 'LH', SQ: 'SQ', TK: 'TK',
+  AV: 'AV', CM: 'CM', ET: 'ET', NZ: 'NZ', TP: 'TP',
+  // SkyTeam
+  AF: 'AF', KL: 'KL', KE: 'KE', AM: 'AM', MU: 'MU', CZ: 'CZ'
+};
 
 function toggleProgram(el) {
   el.classList.toggle('active');
@@ -864,7 +933,6 @@ function processResults(data, origin, dest, maxPrice, maxMiles, maxCopay, fareCl
       duration = outbound.duration_minutes || 0;
       stops = Math.max(0, segments.length - 1);
       miles = null; copay = 0;
-      log(`Offer keys: ${Object.keys(offer).join(', ')} | ignav_id: ${offer.ignav_id || 'MISSING'}`, 'info');
     } else {
       // Mock fallback format
       const itinerary = Array.isArray(offer.flights) ? offer.flights : [offer];
@@ -965,7 +1033,6 @@ async function sendBatchEmailAlert(allDeals, maxPrice, maxMiles) {
       log(`No ignav_id for ${deal.origin}→${deal.dest} — skipping booking link`, 'err');
       return '—';
     }
-    log(`Fetching booking link for ignav_id: ${deal.ignavId}`, 'info');
     try {
       const resp = await fetch('https://ignav-proxy.sandeep-rp001.workers.dev/booking-links', {
         method: 'POST',
@@ -977,7 +1044,6 @@ async function sendBatchEmailAlert(allDeals, maxPrice, maxMiles) {
         return '—';
       }
       const data = await resp.json();
-      log(`Booking link response: ${JSON.stringify(data).slice(0, 120)}`, 'info');
       const options = data.booking_options || [];
       const links = options.flatMap(o => o.links || []);
       const airlineLink = links.find(l => l.provider_type === 'airline');
