@@ -512,13 +512,8 @@
             </button>
             <div class="config-body" id="config-body">
               <div style="font-size:11px;color:var(--accent2);font-family:var(--font-mono);line-height:1.7;margin-bottom:14px;padding:10px 12px;background:rgba(0,201,255,0.06);border:1px solid rgba(0,201,255,0.15);border-radius:8px;">
-                ✦ Ignav — free sign-up at ignav.com<br/>
-                1,000 free requests · no credit card required.<br/>
-                Get your API key from the dashboard after sign-up.
-              </div>
-              <div class="field">
-                <label>Ignav API key</label>
-                <input id="ignav-key" type="password" placeholder="Paste your Ignav API key"/>
+                ✦ Flight data via Ignav · proxied securely through Cloudflare Workers.<br/>
+                No API key needed here — it's stored server-side.
               </div>
               <div class="field" style="margin-top:6px">
                 <label>EmailJS service ID</label>
@@ -621,13 +616,13 @@ let state = {
 })();
 
 function loadKeys() {
-  ['ignav-key','ejs-service','ejs-template','ejs-pubkey','alert-email'].forEach(id => {
+  ['ejs-service','ejs-template','ejs-pubkey','alert-email'].forEach(id => {
     const val = localStorage.getItem(id);
     if (val) document.getElementById(id).value = val;
   });
 }
 function saveKeys() {
-  ['ignav-key','ejs-service','ejs-template','ejs-pubkey','alert-email'].forEach(id => {
+  ['ejs-service','ejs-template','ejs-pubkey','alert-email'].forEach(id => {
     localStorage.setItem(id, document.getElementById(id).value);
   });
   // Re-initialize EmailJS whenever keys are saved
@@ -739,8 +734,6 @@ async function startScan(auto = false) {
   const tripType  = document.getElementById('trip-type').value;
   const dateFrom  = document.getElementById('date-from').value;
   const dateTo    = document.getElementById('date-to').value;
-  const ignavKey  = document.getElementById('ignav-key').value.trim();
-
   const maxPrice  = searchMode === 'price' ? parseFloat(document.getElementById('max-price').value) : null;
   const maxMiles  = searchMode === 'miles' ? parseFloat(document.getElementById('max-miles').value) : null;
   const maxCopay  = searchMode === 'miles' ? parseFloat(document.getElementById('max-copay').value || 25) : null;
@@ -750,11 +743,6 @@ async function startScan(auto = false) {
 
   if (origins.length === 0) { showToast('Add at least one origin airport', 'error'); return; }
   if (!dest) { showToast('Enter a destination airport', 'error'); return; }
-  if (!ignavKey) {
-    showToast('Add your Ignav API key in API Configuration ↓', 'error');
-    if (!document.getElementById('config-body').classList.contains('open')) toggleConfig();
-    return;
-  }
   if (searchMode === 'price' && (!maxPrice || maxPrice < 1)) { showToast('Set a max price to filter deals', 'error'); return; }
   if (searchMode === 'miles' && (!maxMiles || maxMiles < 1000)) { showToast('Set a max miles value to filter deals', 'error'); return; }
 
@@ -792,10 +780,9 @@ async function startScan(auto = false) {
         };
 
         try {
-          const resp = await fetch(`https://ignav.com/api/fares/${endpoint}`, {
+          const resp = await fetch(`https://ignav-proxy.sandeep-rp001.workers.dev/${endpoint}`, {
             method: 'POST',
             headers: {
-              'X-Api-Key': ignavKey,
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
