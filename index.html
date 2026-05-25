@@ -775,8 +775,9 @@ async function startScan(auto = false) {
           destination: dest,
           departure_date: dateFrom,
           cabin_class: cabin,
+          market: 'US',
           ...(tripType === '1' && dateTo ? { return_date: dateTo } : {}),
-          ...(airline ? { carrier: airline } : {})
+          ...(airline ? { airlines_include: [airline] } : {})
         };
 
         try {
@@ -796,7 +797,7 @@ async function startScan(auto = false) {
             allResults.push({ data: generateMockData(origin, dest, maxPrice, maxMiles, airline), origin, dest, cabin, isIgnav: false });
           } else {
             const data = await resp.json();
-            log(`${origin}→${dest} ${cabin}: ${data.itineraries?.length || 0} itineraries returned`, 'ok');
+            log(`${origin}→${dest} ${cabin}: ${Array.isArray(data.itineraries) ? data.itineraries.length : 0} itineraries returned`, 'ok');
             allResults.push({ data, origin, dest, cabin, isIgnav: true });
           }
         } catch(e) {
@@ -879,12 +880,12 @@ function processResults(data, origin, dest, maxPrice, maxMiles, maxCopay, fareCl
 
     if (searchMode === 'price') {
       if (!price || price > maxPrice) return;
-      dealsFound.push({ mode: 'price', origin, dest, price, airlineName, departure, arrival, duration, stops });
+      dealsFound.push({ mode: 'price', origin, dest, price, airlineName, departure, arrival, duration, stops, returnDate: dateTo, ignavId: offer.ignav_id || null });
     } else {
       const m = miles;
       if (!m || m > maxMiles) return;
       if (maxCopay != null && copay > maxCopay) return;
-      dealsFound.push({ mode: 'miles', origin, dest, miles: m, copay, airlineName, departure, arrival, duration, stops, cabin: milesCabin });
+      dealsFound.push({ mode: 'miles', origin, dest, miles: m, copay, airlineName, departure, arrival, duration, stops, cabin: milesCabin, returnDate: dateTo, ignavId: offer.ignav_id || null });
     }
   });
 
@@ -957,9 +958,33 @@ async function sendBatchEmailAlert(allDeals, maxPrice, maxMiles) {
   );
   const top3 = sorted.slice(0, 3);
 
+  // Fetch booking links for each deal via ignav_id
+  async function fetchBookingLink(deal) {
+    if (!deal.ignavId) return '—';
+    try {
+      const resp = await fetch('https://ignav-proxy.sandeep-rp001.workers.dev/booking-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ ignav_id: deal.ignavId })
+      });
+      if (!resp.ok) return '—';
+      const data = await resp.json();
+      // Prefer airline direct link, fall back to first available
+      const options = data.booking_options || [];
+      const links = options.flatMap(o => o.links || []);
+      const airlineLink = links.find(l => l.provider_type === 'airline');
+      const bestLink = airlineLink || links[0];
+      return bestLink?.url || '—';
+    } catch { return '—'; }
+  }
+
+  // Fetch all booking links in parallel
+  const bookingLinks = await Promise.all(top3.map(deal => fetchBookingLink(deal)));
+  log(`Booking links fetched for top ${top3.length} deal(s)`, 'info');
+
   // Build numbered variables for each deal slot (fill blanks if fewer than 3 found)
   const params = { to_email: toEmail };
-  const blank = { route:'—', airline:'—', departure:'—', stops:'—', price_label:'', price:'', miles_label:'', miles:'' };
+  const blank = { route:'—', airline:'—', departure:'—', return_date:'—', stops:'—', price_label:'', price:'', miles_label:'', miles:'', booking_link:'—' };
 
   for (let i = 0; i < 3; i++) {
     const deal = top3[i];
@@ -969,14 +994,16 @@ async function sendBatchEmailAlert(allDeals, maxPrice, maxMiles) {
       continue;
     }
     const isMiles = deal.mode === 'miles';
-    params[`route_${n}`]       = `${deal.origin} → ${deal.dest}`;
-    params[`airline_${n}`]     = deal.airlineName;
-    params[`departure_${n}`]   = deal.departure ? new Date(deal.departure).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'}) : '—';
-    params[`stops_${n}`]       = deal.stops === 0 ? 'Nonstop' : `${deal.stops} stop(s)`;
-    params[`price_label_${n}`] = isMiles ? 'Co-pay' : 'Price';
-    params[`price_${n}`]       = isMiles ? (deal.copay > 0 ? `$${deal.copay} (taxes & fees)` : 'No fees') : `$${deal.price}`;
-    params[`miles_label_${n}`] = isMiles ? 'Miles' : '';
-    params[`miles_${n}`]       = isMiles ? `${deal.miles?.toLocaleString()} miles` : '';
+    params[`route_${n}`]        = `${deal.origin} → ${deal.dest}`;
+    params[`airline_${n}`]      = deal.airlineName;
+    params[`departure_${n}`]    = deal.departure ? new Date(deal.departure).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'}) : '—';
+    params[`return_date_${n}`]  = deal.returnDate ? new Date(deal.returnDate).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—';
+    params[`stops_${n}`]        = deal.stops === 0 ? 'Nonstop' : `${deal.stops} stop(s)`;
+    params[`price_label_${n}`]  = isMiles ? 'Co-pay' : 'Price';
+    params[`price_${n}`]        = isMiles ? (deal.copay > 0 ? `$${deal.copay} (taxes & fees)` : 'No fees') : `$${deal.price}`;
+    params[`miles_label_${n}`]  = isMiles ? 'Miles' : '';
+    params[`miles_${n}`]        = isMiles ? `${deal.miles?.toLocaleString()} miles` : '';
+    params[`booking_link_${n}`] = bookingLinks[i] || '—';
   }
 
   // Subject line: highlight the single best deal
